@@ -201,20 +201,50 @@ async def battleship_singleplayer_ws(websocket: WebSocket):
         print('DISCONNECTED')
 
 
+
 # ----- UNO -----
 
 @app.get("/uno/simulation/", response_class=HTMLResponse)
 async def uno_simulation(request: Request):
     return templates.TemplateResponse("game/uno/simulation.html", {"request": request})
 
-
 @app.websocket("/uno/simulation/ws")
 async def uno_simulation_ws(websocket: WebSocket):
     await websocket.accept()
+    idx_player_you = 0
 
     try:
+        game = uno.Uno()
+        # You might want to set number of players here. For example:
+        # game.state.cnt_player = 2
+        # game.set_state(game.state)
 
-        pass
+        player = uno.RandomPlayer()
+
+        # The UNO game must be set up before it starts running
+        game.state.cnt_player = 2
+        game.set_state(game.state)  # Will initialize the game
+        while True:
+            state = game.get_state()
+            list_action = game.get_list_action()
+            action = player.select_action(state, list_action) if list_action else None
+
+            dict_state = state.model_dump()
+            dict_state['idx_player_you'] = idx_player_you
+            dict_state['list_action'] = []
+            dict_state['selected_action'] = None if action is None else action.model_dump()
+            data = {'type': 'update', 'state': dict_state}
+            await websocket.send_json(data)
+
+            if state.phase == uno.GamePhase.FINISHED:
+                break
+
+            data = await websocket.receive_json()
+            if data['type'] == 'action':
+                # Since uno.py doesn't have UnoAction as a separate class, we use Action
+                # Adjust if you rename 'Action' to something else in uno.py
+                action = uno.Action.model_validate(data['action'])
+                game.apply_action(action)
 
     except WebSocketDisconnect:
         print('DISCONNECTED')
@@ -224,14 +254,65 @@ async def uno_simulation_ws(websocket: WebSocket):
 async def uno_singleplayer(request: Request):
     return templates.TemplateResponse("game/uno/singleplayer.html", {"request": request})
 
-
 @app.websocket("/uno/singleplayer/ws")
 async def uno_singleplayer_ws(websocket: WebSocket):
     await websocket.accept()
+    idx_player_you = 0
 
     try:
+        game = uno.Uno()
+        game.state.cnt_player = 2
+        game.set_state(game.state)
+        player = uno.RandomPlayer()
 
-        pass
+        while True:
+            state = game.get_state()
+            if state.phase == uno.GamePhase.FINISHED:
+                break
+
+            if state.idx_player_active == idx_player_you:
+                # Your turn
+                state = game.get_player_view(idx_player_you)
+                list_action = game.get_list_action()
+                dict_state = state.model_dump()
+                dict_state['idx_player_you'] = idx_player_you
+                dict_state['list_action'] = [action.model_dump() for action in list_action]
+                data = {'type': 'update', 'state': dict_state}
+                await websocket.send_json(data)
+
+                if len(list_action) == 0:
+                    game.apply_action(None)
+                else:
+                    data = await websocket.receive_json()
+                    if data['type'] == 'action':
+                        action = uno.Action.model_validate(data['action'])
+                        game.apply_action(action)
+                        print(action)
+
+                # Update after your turn
+                state = game.get_player_view(idx_player_you)
+                dict_state = state.model_dump()
+                dict_state['idx_player_you'] = idx_player_you
+                dict_state['list_action'] = []
+                data = {'type': 'update', 'state': dict_state}
+                await websocket.send_json(data)
+
+            else:
+                # Opponent turn
+                state_active = game.get_player_view(state.idx_player_active)
+                list_action = game.get_list_action()
+                action = player.select_action(state_active, list_action)
+                if action is not None:
+                    await asyncio.sleep(1)
+                game.apply_action(action)
+
+                # Update after opponent turn
+                state = game.get_player_view(idx_player_you)
+                dict_state = state.model_dump()
+                dict_state['idx_player_you'] = idx_player_you
+                dict_state['list_action'] = []
+                data = {'type': 'update', 'state': dict_state}
+                await websocket.send_json(data)
 
     except WebSocketDisconnect:
         print('DISCONNECTED')
@@ -240,10 +321,33 @@ async def uno_singleplayer_ws(websocket: WebSocket):
 @app.websocket("/uno/random_player/ws")
 async def uno_random_player_ws(websocket: WebSocket):
     await websocket.accept()
+    idx_player_you = 0
 
     try:
+        game = uno.Uno()
+        game.state.cnt_player = 2
+        game.set_state(game.state)
+        player = uno.RandomPlayer()
 
-        pass
+        while True:
+            state = game.get_state()
+            list_action = game.get_list_action()
+            action = player.select_action(state, list_action) if list_action else None
+
+            dict_state = state.model_dump()
+            dict_state['idx_player_you'] = idx_player_you
+            dict_state['list_action'] = []
+            dict_state['selected_action'] = None if action is None else action.model_dump()
+            data = {'type': 'update', 'state': dict_state}
+            await websocket.send_json(data)
+
+            if state.phase == uno.GamePhase.FINISHED:
+                break
+
+            data = await websocket.receive_json()
+            if data['type'] == 'action':
+                action = uno.Action.model_validate(data['action'])
+                game.apply_action(action)
 
     except WebSocketDisconnect:
         print('DISCONNECTED')
