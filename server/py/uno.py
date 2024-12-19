@@ -168,14 +168,6 @@ class Uno(Game):
                         else self.state.cnt_to_draw + 2
                     )
                     stackable.append(Action(card=c, color=c.color if c.color else 'any', draw=draw_val))
-                elif c.symbol == 'wilddraw4':
-                    base_draw = 4
-                    draw_val = (
-                        base_draw if (normal_playable_exists and not cumulative_scenario)
-                        else (self.state.cnt_to_draw + 4)
-                    )
-                    for col in ['red', 'green', 'yellow', 'blue']:
-                        stackable.append(Action(card=c, color=col, draw=draw_val))
                 else:
                     if not cumulative_scenario:
                         chosen_color = c.color if c.color else 'any'
@@ -481,7 +473,3 @@ class RandomPlayer(Player):
 if __name__ == "__main__":
     # Initialize a UNO game with 2 players
     game = Uno()
-    initial_state = GameState(cnt_player=2)
-    game.set_state(initial_state)
-    game.print_state()
-    # You can now call game.get_list_action(), game.apply_action(), etc.
